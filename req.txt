@@ -1,0 +1,8 @@
+streamlit
+ollama
+diffusers
+transformers
+torch
+accelerate
+safetensors
+

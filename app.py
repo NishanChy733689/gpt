@@ -1,48 +1,56 @@
+# app.py
 import streamlit as st
 from ollama import chat
 
-# Sidebar setup
-with st.sidebar:
-    st.title("🤖💬 Ollama Chatbot")
+st.set_page_config(page_title="AI Chatbot with Voice & Image", layout="centered")
 
-    # List all downloaded models
-    models = ["qwen2.5-coder:1.5b","gemma3:1b","phi:latest","qwen3:0.6b"]
+# -------------------- Sidebar --------------------
+st.sidebar.title("🤖 AI Controls")
+models = ["smollm:135m","qwen2.5-coder:1.5b","gemma3:1b","phi:latest","qwen3:0.6b","gemma3n:e2b"]
+model = st.sidebar.selectbox("Choose a model", models)
 
-    if not models:
-        st.error("No models found in Ollama. Use `ollama run <model>` to download one.")
-        st.stop()
-
-    # Model selection
-    model = st.selectbox("Choose a model", models)
-    st.success(f"Using model: {model}")
-
-# Session state initialization
+if st.sidebar.button("🗑️ Clear Chat History"):
+    st.session_state.messages = []
+    st.rerun()
+# --------------- Session State Init ----------------
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# Display message history
-for msg in st.session_state.messages:
-    st.chat_message(msg["role"]).markdown(msg["content"])
 
-# Prompt input
-if prompt := st.chat_input("Your message"):
+st.title("AI Personality Chatbot")
+
+for msg in st.session_state.messages:
+    if msg["role"] != "system":
+        st.chat_message(msg["role"]).markdown(msg["content"])
+
+prompt = st.chat_input("Say or type something...")
+
+# ---------------- Handle Response ----------------
+if prompt:
     st.chat_message("user").markdown(prompt)
     st.session_state.messages.append({"role": "user", "content": prompt})
+    with st.spinner("Thinking..."):
+            response = ""   
+            try:
+                stream = chat(model=model, messages=st.session_state.messages, stream=True, )
+            except:
+                 pass
+            placeholder = st.empty()
+            for chunk in stream:
+                delta = chunk.get("message", {}).get("content", "")
+                response += delta
+                placeholder.markdown(response + "▌")
+            placeholder.markdown(response)
+            st.session_state.messages.append({"role": "assistant", "content": response})
 
-    full_response = ""
-    placeholder = st.chat_message("assistant").empty()
+            # 🔊 Browser TTS
+            b64 = base64.b64encode(response.encode()).decode()
+            st.markdown(f"""
+            <script>
+            const msg = new SpeechSynthesisUtterance(atob('{b64}'));
+            window.speechSynthesis.speak(msg);
+            </script>
+            """, unsafe_allow_html=True)
 
-    # Stream response from Ollama
-    stream = chat(
-        model=model,
-        messages=st.session_state.messages,
-        stream=True
-    )
+# ----------------- Voice Input Button -----------------
 
-    for chunk in stream:
-        delta = chunk.get("message", {}).get("content", "")
-        full_response += delta
-        placeholder.markdown(full_response + "▌")
-
-    placeholder.markdown(full_response)
-    st.session_state.messages.append({"role": "assistant", "content": full_response})
